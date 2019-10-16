@@ -5,8 +5,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactInstanceManager;
@@ -20,6 +21,43 @@ import org.json.JSONObject;
 public class MessagingService extends FirebaseMessagingService {
 
     private static final String TAG = "MessagingService";
+
+    @Override
+    public void onNewToken(String token) {
+        Log.d(TAG, "Refreshed token: " + token);
+
+        // Broadcast refreshed token
+        Intent i = new Intent("com.evollu.react.fcm.FCMRefreshToken");
+        Bundle bundle = new Bundle();
+        bundle.putString("token", token);
+        i.putExtras(bundle);
+
+        final Intent message = i;
+
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+            public void run() {
+                // Construct and load our normal React JS code bundle
+                ReactInstanceManager mReactInstanceManager = ((ReactApplication) getApplication()).getReactNativeHost().getReactInstanceManager();
+                ReactContext context = mReactInstanceManager.getCurrentReactContext();
+                // If it's constructed, send a notification
+                if (context != null) {
+                    LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(message);
+                } else {
+                    // Otherwise wait for construction, then send the notification
+                    mReactInstanceManager.addReactInstanceEventListener(new ReactInstanceManager.ReactInstanceEventListener() {
+                        public void onReactContextInitialized(ReactContext context) {
+                            LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(message);
+                        }
+                    });
+                    if (!mReactInstanceManager.hasStartedCreatingInitialContext()) {
+                        // Construct it in the background
+                        mReactInstanceManager.createReactContextInBackground();
+                    }
+                }
+            }
+        });
+    }
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
